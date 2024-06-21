@@ -1,0 +1,620 @@
+---
+title: "46862897_BUSA3020_Customer Segmentation Report"
+output: pdf_document
+---
+Understanding customer behavior is crucial for effective marketing and customer satisfaction. This analysis uses a dataset from 4,000 supermarket loyalty cardholders, including demographics and socio-economic variables like age, gender, marital status, education, occupation, settlement size, and income. We apply cluster analysis techniques, particularly K-means++ and Agglomerative clustering, to segment customers. The process involves data preprocessing, PCA, and clustering, to identify distinct customer groups and enhance marketing strategies and customer loyalty.
+
+## 1. Dataset Overview
+
+The dataset comprises 4000 observations distributed across 7 columns, with 7 duplicates and no missing values It is crucial to remove duplicates to avoid impacting the quality, accuracy, and reliability of the data, and lead to inaccurate results in later analysis.
+
+
+```{python, echo=FALSE}
+import numpy as np
+import pandas as pd
+from markdown import markdown
+pd.set_option('display.max_columns', None)
+
+df = pd.read_csv("data.csv")
+df_clean = df.drop_duplicates() # remove duplicate rows
+df_clean.reset_index(drop=True, inplace=True) # reset index
+```
+
+
+## 2. Exploratory Data Analysis (EDA)
+
+```{python, echo=FALSE}
+df_clean.describe()
+```
+
+**Analysis:**
+
+- Income: 75% of observations are under 165,904, but the highest is 309,364. 
+
+- Age: 75% are under 47, but the highest is 76. 
+
+```{python, echo= FALSE}
+import matplotlib.pyplot as plt
+plt.figure(figsize = (10,5))
+
+plt.subplot(1,2,1)
+plt.title("Distribution of Income")
+plt.hist(df_clean["Income"])
+plt.xlabel("Income")
+plt.ylabel("Count")
+
+plt.subplot(1,2,2)
+plt.hist(df_clean["Age"])
+plt.title("Distribution of Age")
+plt.xlabel("Age")
+plt.ylabel("Count")
+
+plt.tight_layout()
+plt.show()
+```
+
+Income and Age has normal and unimodal distributions although it appears to be slightly left-skewed.
+
+
+```{python, echo= FALSE}
+## define a function to remove outliers
+def remove_outliers(df,column_names):
+    for column_name in column_names:
+    
+        ## identify quantiles
+        quantile_1 = df[column_name].quantile(0.25) # 25% Quantile
+        quantile_3 = df[column_name].quantile(0.75) # 75% Quantile
+        iqr = quantile_3 - quantile_1
+
+        # detect outliers
+        lower_bound = quantile_1 - 1.5*iqr
+        upper_bound = quantile_3 + 1.5*iqr
+
+        # remove outliers
+        df_clean = df[(df[column_name] >= lower_bound) & (df[column_name] <= upper_bound)]
+    return df_clean
+
+## Remove outliers in Income & Age
+columns_to_remove = ["Income", "Age"]
+df_clean = remove_outliers(df_clean, columns_to_remove)
+```
+
+### 2.1 Visualization
+
+```{python, echo= FALSE, warning = FALSE, message = FALSE}
+import warnings
+warnings.filterwarnings("ignore")
+
+## Counts each category in Gender column
+gender_counts = df_clean['Gender'].value_counts()
+
+## Draw a bar chart
+#plt.figure(figsize=(6, 4))
+colors = ['#1A85FF', '#D41159']
+plt.bar(gender_counts.index, gender_counts.values, color = colors)
+plt.xticks([0, 1], ['Male (0)', 'Female (1)'])  # Set ticks to show 0 and 1 only
+plt.ylabel("Count")
+plt.xlabel("Gender")
+plt.title("Gender Counts")
+plt.show();
+
+gender_counts
+```
+
+**Analysis:** The number of male consumers are roughly equal to that of females, with 50.95% males and 49.05% females buying items in their supermarket chain.
+
+```{python, echo= FALSE}
+fig, ax = plt.subplots(1, 2, figsize=(6,4))
+
+# Box plot for Income by Gender
+df_clean.boxplot(by='Gender', column=['Income'], grid=False, ax=ax[0])
+ax[0].set_title('Income by Gender')
+ax[0].set_xlabel('Gender')
+ax[0].set_ylabel('Income')
+ax[0].set_xticklabels(['Male (0)', 'Female (1)'])
+
+# Box plot for Age by Gender
+df_clean.boxplot(by='Gender', column=['Age'], grid=False, ax=ax[1])
+ax[1].set_title('Age by Gender')
+ax[1].set_xlabel('Gender')
+ax[1].set_ylabel('Age')
+ax[1].set_xticklabels(['Male (0)', 'Female (1)'])
+
+# Remove the automatic 'Boxplot grouped by ...' super title
+plt.suptitle('')
+plt.tight_layout()
+plt.show()
+```
+
+**Analysis:**
+
+- Men have a wider range and higher median income, indicating varied earnings with generally higher amounts. 
+
+- Women show more extreme income values despite a narrower range. Women also have a wider age range and a higher average age compared to men. 
+
+
+```{python, echo=FALSE}
+# Count how many marital statuses category observations are within each gender
+marital_gender_counts = df_clean.groupby(['Marital Status', 
+                                        'Gender']).size().unstack(fill_value=0)
+
+## It will show as below
+##         Gender      0        1
+## Marital Status 
+##      0             555     1399
+##      1            1475      555
+
+marital_gender_counts.columns = ['Male', 'Female']  # Rename columns
+
+##
+## Count how many education levels are within each gender
+education_gender_counts = df_clean.groupby(['Education', 
+                                          'Gender']).size().unstack(fill_value=0)
+education_gender_counts.columns = ['Male', 'Female']   # Rename columns
+
+##
+## Count how many settlement size are within each gender
+settlementSize_gender_counts = df_clean.groupby(['Settlement Size', 
+                                              'Gender']).size().unstack(fill_value=0)
+settlementSize_gender_counts.columns = ['Male', 'Female']   # Rename columns
+
+##
+## Count how many settlement size are within each gender
+occupation_gender_counts = df_clean.groupby(['Occupation', 
+                                          'Gender']).size().unstack(fill_value=0)
+occupation_gender_counts.columns = ['Male', 'Female']   # Rename columns
+```
+
+```{python, echo= FALSE}
+# Parameters
+bar_width = 0.35  # width of bars
+
+# Setup figure and axes for two subplots
+fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12, 8))
+
+# =============================================================
+# First subplot for Marital Status
+index = np.arange(len(marital_gender_counts))
+
+ax1.bar(index, marital_gender_counts['Male'], bar_width, 
+label='Male', color='#1A85FF')
+
+ax1.bar(index + bar_width, marital_gender_counts['Female'], bar_width, 
+label='Female', color='#D41159')
+
+ax1.set_xlabel('Marital Status')
+ax1.set_ylabel('Counts')
+ax1.set_title('The Number of Males and Females within Marital Statuses')
+ax1.set_xticks(index + bar_width / 2)
+ax1.set_xticklabels(['Single (0)', 'Non-Single (1)'])
+
+# =============================================================
+# Second subplot for Education
+index = np.arange(len(education_gender_counts))
+
+ax2.bar(index, education_gender_counts['Male'], bar_width, 
+label='Male', color='#1A85FF')
+
+ax2.bar(index + bar_width, education_gender_counts['Female'], bar_width, 
+label='Female', color='#D41159')
+
+ax2.set_xlabel('Education Levels')
+ax2.set_ylabel('Counts')
+ax2.set_title('The Number of Males and Females within Education Levels')
+ax2.set_xticks(index + bar_width / 2)
+ax2.set_xticklabels(['Unknown (0)', 'High School (1)', "University (2)", 
+                    "Graduate School (3)"]) 
+
+# =============================================================
+# Third subplot for Settlement Size
+index = np.arange(len(settlementSize_gender_counts))
+
+ax3.bar(index, settlementSize_gender_counts['Male'], bar_width, 
+label='Male', color='#1A85FF')
+
+ax3.bar(index + bar_width, settlementSize_gender_counts['Female'], bar_width, 
+label='Female', color='#D41159')
+
+ax3.set_xlabel('Settlement Size')
+ax3.set_ylabel('Counts')
+ax3.set_title('The Number of Males and Females within Settlement Size')
+ax3.set_xticks(index + bar_width / 2)
+ax3.set_xticklabels(['Small City (0)', 'Mid-Sized City (1)', "Big City (2)"]) 
+
+# =============================================================
+# Fourth subplot for Occupation
+index = np.arange(len(occupation_gender_counts))
+
+ax4.bar(index, occupation_gender_counts['Male'], bar_width, 
+label='Male', color='#1A85FF')
+
+ax4.bar(index + bar_width, occupation_gender_counts['Female'], bar_width, 
+label='Female', color='#D41159')
+
+ax4.set_xlabel('Occupation')
+ax4.set_ylabel('Counts')
+ax4.set_title('The Number of Males and Females within Occupation')
+ax4.set_xticks(index + bar_width / 2)
+ax4.set_xticklabels(['Unemployed (0)', 'Skilled (1)', "Self-employed (2)"]) 
+
+handles, labels = ax1.get_legend_handles_labels()
+fig.legend(handles, labels, loc='upper center', ncol=2, bbox_to_anchor=(0.5,0), 
+borderpad=0.75, labelspacing=1, handlelength=2)
+
+# Display the plot
+plt.tight_layout()
+plt.show()
+```
+
+**Analysis:** Single females nearly double single males; non-single females are half of males. Females with unknown education outnumber males; more females at university level. Males predominate in small cities; females slightly more in mid-sized and big cities. More female skilled workers; more male unemployed and self-employed.
+
+## 3. Clustering
+
+### 3.1. K-Means++ Clustering
+
+K-means clustering organizes data into groups by refining centroids iteratively, like assigning students to teams based on similar skills. KMeans++ improves results by better centroid selection despite higher computational cost.
+
+```{python, echo = FALSE, message = FALSE}
+from sklearn.cluster import KMeans
+
+X = df.values
+inertias = [] # empty list to store inertia values
+
+# Loop over different values of k to find the optimal number of clusters
+for i in range(1, 11):
+    km = KMeans(n_clusters=i, 
+                init='k-means++', 
+                n_init=10, 
+                max_iter=300, 
+                random_state=0)
+    km.fit(X)  # Fit K-means using the PCA-transformed data
+    inertias.append(km.inertia_)
+
+# Plotting the elbow plot to observe the 'elbow' point to determine the optimal number of clusters
+plt.plot(range(1, 11), inertias, marker='o')
+plt.xlabel('Number of clusters')
+plt.ylabel('Cluster inertia (within-cluster SSE)')
+plt.xticks(range(1, 11))
+plt.title('Elbow Plot for Determining Optimal Number of Clusters')
+plt.tight_layout()
+plt.show()
+```
+
+
+The elbow method is used to determine the optimal number of clusters by graphing data fit across different group numbers to identify the point where the improvement slows down. From the graph, there are 3 possible values (2,3, and 4).
+
+The silhouette method evaluates cluster quality by measuring data point similarity within its cluster compared to others. Higher silhouette values indicate better clustering. The 3 values will be plotted using the method to determine how many clusters would result in better clustering.
+
+```{python, echo = FALSE}
+from matplotlib.cm import get_cmap
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_samples
+
+# Define the number of clusters to test
+num_clusters = [2, 3, 4]
+
+# Create subplots with 1 row and 3 columns
+fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+for idx, n_clusters in enumerate(num_clusters):
+    km = KMeans(n_clusters=n_clusters, init='k-means++', n_init=10, max_iter=300, random_state=0)
+    y_km = km.fit_predict(X)
+
+    cluster_labels = np.unique(y_km)
+    silhouette_vals = silhouette_samples(X, y_km, metric='euclidean')
+    
+    y_ax_lower, y_ax_upper = 0, 0
+    yticks = []
+
+    for i, c in enumerate(cluster_labels):
+        c_silhouette_vals = silhouette_vals[y_km == c]
+        c_silhouette_vals.sort()
+        y_ax_upper += len(c_silhouette_vals)
+        color = get_cmap("jet")(float(i) / n_clusters)
+        axes[idx].barh(range(y_ax_lower, y_ax_upper), c_silhouette_vals, height=1.0, edgecolor='none', color=color)
+        yticks.append((y_ax_lower + y_ax_upper) / 2.)
+        y_ax_lower += len(c_silhouette_vals)
+    
+    silhouette_avg = np.mean(silhouette_vals)
+    print(f'Silhouette average for {n_clusters} clusters: {silhouette_avg:.2f}')
+
+    axes[idx].axvline(silhouette_avg, color="red", linestyle="--")  # plot vertical average line
+    axes[idx].set_yticks(yticks)
+    axes[idx].set_yticklabels(cluster_labels + 1)
+    axes[idx].set_ylabel('Cluster')
+    axes[idx].set_xlabel('Silhouette coefficient')
+    axes[idx].set_title(f'Silhouette Analysis for {n_clusters} Clusters')
+
+    # Place the silhouette average below the graph
+    axes[idx].text(0.5, -0.2, f'Avg silhouette score: {silhouette_avg:.2f}', transform=axes[idx].transAxes, 
+                   ha='center', va='center', fontsize=12, color='black', bbox=dict(facecolor='white', alpha=0.6))
+
+plt.tight_layout()
+plt.show()
+```
+
+**Analysis:** The 2-cluster has the highest average silhouette score (0.66), followed by 3-cluster (0.57) and 4-cluster (0.54). ***Hence, there are 2 clusters in KMeans++.***
+
+```{python, echo = FALSE}
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+# Fit K-means with two clusters using random initialization
+km = KMeans(n_clusters=2,  
+            init='k-means++', 
+            n_init=10, 
+            max_iter=300,
+            tol=1e-04,
+            random_state=0)
+y_km = km.fit_predict(X)
+
+
+k_means_df = df.copy()
+k_means_df['Cluster'] = y_km
+k_means_df['Cluster'] = k_means_df['Cluster'].replace({0: 1, 1: 2})
+cluster_count_kmeans = k_means_df["Cluster"].value_counts()
+
+plt.bar(cluster_count_kmeans.index, cluster_count_kmeans.values, color = colors)
+plt.title("Number of customers in each cluster")
+plt.ylabel("Count")
+plt.xticks([1, 2], ['Cluster 1', 'Cluster 2'])  # Set ticks to show 0 and 1 only
+plt.show()
+
+cluster_count_kmeans
+```
+
+**Analysis:** The number of customers in Cluster 1 (2816 customers) is significantly higher than Cluster 2 (1184 customers), with a difference of 632 customers. This suggests that Cluster 1 is the dominant cluster, representing a larger portion of the customer base.
+
+To analyse the meanings of each cluster using KMeans++, a descriptive statistic should be conducted.
+
+```{python, echo = FALSE}
+print("KMeans++ - Cluster 1")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(pander)
+
+# Create the updated data frame for the table
+data <- data.frame(
+  Description = c("Gender", "Marital Status", "Education", "Settlement Size", "Occupation", "Income", "Age"),
+  Mean = c(0.579545, 0.503906, 1.316761, 0.920455, 0.992543, 107414.140625, 34.881037),
+  Comment = c(
+    "About 57.95% female, 42.05% male.",
+    "About 50.39% non-single, 49.61% single.",
+    "Average level between high school and university.",
+    "Mostly mid-sized city residents.",
+    "Predominantly skilled employees.",
+    "Relatively high income.",
+    "Middle-aged individuals."
+  ),
+  stringsAsFactors = FALSE
+)
+# Print the table using pander with left alignment
+panderOptions('table.alignment.default', 'left')
+pander(data)
+```
+
+**Conclusion:** Overall, Cluster 1 represents a group of predominantly middle-aged, moderately wealthy females with education levels between high school and university living in mid-sized to big cities with skilled employee or official roles and a balanced proportion of single and non-single individuals.
+
+```{python, echo = FALSE}
+print("KMeans++ - Cluster 2")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(pander)
+
+# Create the updated data frame for the table
+data <- data.frame(
+  Description = c("Gender", "Marital Status", "Education", "Settlement Size", "Occupation", "Income", "Age"),
+  Mean = c(0.275338, 0.526182, 2.639358, 1.493243, 1.695946, 198426.477196, 51.993243),
+  Comment = c(
+    "About 27.53% female, 72.47% male.",
+    "About 52.62% non-single, 47.38% single.",
+    "Average level close to graduate school.",
+    "Mostly big city residents.",
+    "Predominantly in management or highly qualified roles.",
+    "Relatively high income.",
+    "Older individuals."
+  ),
+  stringsAsFactors = FALSE
+)
+
+# Print the table using pander with left alignment
+panderOptions('table.alignment.default', 'left')
+pander(data)
+```
+
+**Conclusion:** Cluster 1 represents predominantly younger, non-single, skilled female employees living in small to mid-sized cities, with education levels around high school to university and lower income levels.
+
+### 4.2 Agglomerative Clustering
+
+Agglomerative clustering groups similar items into clusters step-by-step. For example, in a library, books are gradually organized into categories like fiction and non-fiction.
+
+```{python, echo = FALSE}
+from sklearn.cluster import AgglomerativeClustering
+
+# Define the Agglomerative Clustering model
+ac = AgglomerativeClustering(n_clusters=2, metric='euclidean', linkage='complete')
+y_ac = ac.fit_predict(X)
+
+agglomerative_df = df.copy()
+agglomerative_df['Cluster'] = y_ac
+agglomerative_df['Cluster'] = agglomerative_df['Cluster'].replace({0: 1, 1: 2})
+cluster_count_agglomerative = agglomerative_df["Cluster"].value_counts()
+
+plt.bar(cluster_count_agglomerative.index, cluster_count_agglomerative.values, color = colors)
+plt.title("Number of customers in each cluster")
+plt.ylabel("Count")
+plt.xticks([1, 2], ['Cluster 1', 'Cluster 2'])  # Set ticks to show 0 and 1 only
+plt.show()
+
+cluster_count_agglomerative
+```
+
+**Analysis:** The number of customers in Cluster 1 (approximately 2046 customers) is significantly slightly higher than Cluster 2 (around 1954 customers).
+
+To analyse the meanings of each cluster using Agglomerative Clustering, a descriptive statistic should be conducted.
+
+```{python, echo = FALSE}
+print("Agglomerative Clustering - Cluster 1")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(pander)
+
+# Create the data frame for the table
+data <- data.frame(
+  Description = c("Gender", "Marital Status", "Education", "Settlement Size", "Occupation", "Income", "Age"),
+  Mean = c(0.291789, 0.661779, 1.930596, 0.951124, 1.356794, 171562.022483, 46.502933),
+  Comment = c(
+    "About 29.18% female, 70.82% male.",
+    "About 66.18% non-single, 33.82% single.",
+    "Average level between high school and university.",
+    "Mostly mid-sized city residents.",
+    "Predominantly skilled employees.",
+    "Relatively high income.",
+    "Middle-aged individuals."
+  ),
+  stringsAsFactors = FALSE
+)
+
+# Print the table using pander with left alignment
+panderOptions('table.alignment.default', 'left')
+pander(data)
+```
+
+**Conclusion:** Overall, Cluster 1 represents a group of predominantly older, wealthy males with university level living in mid-sized to big cities with skilled employee, official, or management roles and a higher proportion of non-single individuals.
+
+
+```{python, echo = FALSE}
+print("Agglomerative Clustering - Cluster 2")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(pander)
+
+# Create the updated data frame for the table
+data <- data.frame(
+  Description = c("Gender", "Marital Status", "Education", "Settlement Size", "Occupation", "Income", "Age"),
+  Mean = c(0.696520, 0.352098, 1.475435, 1.235415, 1.037359, 95393.690379, 33.080860),
+  Comment = c(
+    "About 69.65% female, 30.35% male.",
+    "About 35.21% non-single, 64.79% single.",
+    "Average level between high school and university.",
+    "Mostly mid-sized city residents.",
+    "Predominantly skilled employees.",
+    "Moderate income.",
+    "Younger individuals."
+  ),
+  stringsAsFactors = FALSE
+)
+
+# Print the table using pander with left alignment
+panderOptions('table.alignment.default', 'left')
+pander(data)
+```
+
+**Conclusion:** Cluster 2 represents a group of predominantly younger, moderately wealthy females with education levels between high school and university living in mid-sized to big cities with skilled employee or official roles and a higher proportion of single individuals
+
+## 4. K-Means and Agglomerative Clustering Insight Comparison
+
+```{python, echo = FALSE}
+cluster_count_kmeans = cluster_count_kmeans.sort_index()
+cluster_count_agglomerative = cluster_count_agglomerative.sort_index()
+
+# Convert to values
+cluster_count_kmeans_values = cluster_count_kmeans.values
+cluster_count_agglomerative_values = cluster_count_agglomerative.values
+
+# Define the labels and bar width
+labels = ['Cluster 0', 'Cluster 1']
+barWidth = 0.35
+
+# Set position of bar on X axis
+r1 = np.arange(len(cluster_count_kmeans_values))
+r2 = [x + barWidth for x in r1]
+
+# Make the plot
+plt.figure(figsize=(7, 5))
+plt.bar(r1, cluster_count_kmeans_values, color='#1A85FF', width=barWidth, edgecolor='grey', label='K-means')
+plt.bar(r2, cluster_count_agglomerative_values, color='#D41159', width=barWidth, edgecolor='grey', label='Agglomerative')
+
+# Add xticks on the middle of the group bars
+plt.xlabel('Cluster', fontweight='bold')
+plt.ylabel('Count', fontweight='bold')
+plt.title('Comparison of Cluster Counts between K-means and Agglomerative Clustering')
+plt.xticks([r + barWidth/2 for r in range(len(cluster_count_kmeans_values))], labels)
+
+# Create legend & Show graphic
+plt.legend()
+plt.show()
+```
+
+Revise what we have discovered in the outputs of the two clustering algorithms:
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(pander)
+
+# Set pander options for left alignment
+panderOptions('table.alignment.default', 'left')
+
+# Create the data frame for the table
+data <- data.frame(
+  Description = c("Age", "Education", "Income", "Gender", "Marital Status", "Settlement Size", "Occupation"),
+  KMeans_Cluster1 = c("Middle-aged", "High school to University", "Moderately wealthy", "Predominantly females", "Single and non-single", "Mid-sized to big cities", "Skilled employees"),
+  KMeans_Cluster2 = c("Older", "University to Graduate School", "Wealthy", "Predominantly males", "Single and non-single", "Mid-sized to big cities", "High-level occupations"),
+  Agglomerative_Cluster1 = c("Older", "University", "Wealthy", "Predominantly males", "Non-single individuals", "Mid-sized to big cities", "Skilled employees"),
+  Agglomerative_Cluster2 = c("Younger", "High school to University", "Moderately wealthy", "Predominantly females", "Single individuals", "Mid-sized to big cities", "Skilled employees"),
+  stringsAsFactors = FALSE
+)
+
+# Print the table using pander
+pander(data)
+```
+
+### Overlap and Differences:
+
+- K-Means++ Cluster 1 vs. Agglomerative Cluster 1:
+    - Overlap: Settlement Size, Occupation
+    - Differences: Age, Education, Income, Gender, Marital Status
+
+- K-Means++ Cluster 2 vs. Agglomerative Cluster 2:
+    - Overlap: Settlement Size, Occupation
+    - Differences: Age, Education, Income, Gender, Marital Status
+
+**--> Conclusion**
+
+After the data are clustered into 2 different groups, there are obvious distinctions. In general, the first clusters identified by two techniques both have higher number of data points than the second clusters have.
+
+The first cluster identified by Kmeans++ is totally different compared to the first cluster identified by agglomerative clustering. Looking at the comparison table, the Kmeans++ first cluster appears to be the second cluster in agglomerative clustering. This pattern also applies to Kmeans++ second cluster, which is more identical to the first cluster in agglomerative clustering. identified.
+
+## 6. Suggestions tailored for the two clusters identified by Kmeans++:
+
+### 6.1. Cluster 1: Middle-aged, Moderately Wealthy Females with Education Levels between High School and University Living in Mid-Sized to Big Cities with Skilled Employee or Official Roles
+
+- Goal: Enhance work-life balance and convenience.
+
+  - Promote time-saving products and services: Offer ready-to-eat meals, meal kits, and quick recipes that fit into their busy schedules.
+        
+  - Loyalty Programs: Introduce loyalty programs with exclusive deals on household essentials and personal care products.
+        
+  - Community Engagement: Organize local community events or online forums where they can share tips on managing work-life balance and get recommendations for related products.
+        
+  - Health and Wellness: Provide newsletters with health tips and promote fitness-related products and services, such as gym memberships or wellness workshops.
+
+### 6.2. Cluster 2: Older, Wealthy Males with Education Levels between University and Graduate School Living in Mid-Sized to Big Cities with High-Level Occupations
+
+- Goal: Focus on premium quality and luxury.
+
+  - Premium Product Lines: Emphasize high-end product lines, such as gourmet foods, premium wines, and exclusive brands.
+        
+  - Personalized Services: Offer personalized shopping experiences, such as personal shoppers, custom orders, and home delivery services tailored to their preferences.
+        
+  - Exclusive Events: Invite them to exclusive events like wine tastings, cooking classes, and gourmet food festivals.
+        
+  - Health and Wellness: Highlight the health benefits of premium products and provide tailored health and wellness programs, including private fitness sessions and wellness retreats.
+
+## 7. In Summary:
+
+KMeans++ and Agglomerative clustering segmented a dataset of 4,000 customers using variables like age, gender, income, education, marital status, and settlement size. This resulted in two main segments, enabling targeted and effective marketing strategies to attract the right customers with the right demands at the right time.
