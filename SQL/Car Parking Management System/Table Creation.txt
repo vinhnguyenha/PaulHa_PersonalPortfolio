@@ -1,0 +1,113 @@
+-- TABLE For Car Park
+CREATE TABLE IF NOT EXISTS `Car_park` (
+	`car_park_id` INT UNSIGNED NOT NULL, -- can't contain null values or negative numbers
+    `map_reference` VARCHAR(10) NOT NULL, -- can't contain null values
+    `car_park_description` VARCHAR(200) NULL, -- can contain null values
+    PRIMARY KEY (car_park_id)
+);
+
+-- TABLE For Swipe Card
+CREATE TABLE IF NOT EXISTS `Swipe_card` (
+	`swipe_card_id` INT UNSIGNED NOT NULL,
+    `name_on_card` VARCHAR(100) NOT NULL,
+	`staff_number` 	VARCHAR(10) NULL,
+    `contact_phone` VARCHAR(20) NOT NULL,
+    PRIMARY KEY (`swipe_card_id`)
+);
+
+-- TABLE For Spot Reservation Parking Area
+CREATE TABLE IF NOT EXISTS `Spot_reservation_parking_area`(
+	`parking_area_id` INT UNSIGNED NOT NULL,
+    `car_park_id` INT UNSIGNED NOT NULL,
+    `area_name` VARCHAR(45) NULL,
+    PRIMARY KEY (`parking_area_id`),
+    INDEX `fk_spot_reservation_parking_area_car_park_id_idx` (`car_park_id` ASC) VISIBLE,
+    CONSTRAINT `fk_spot_reservation_parking_area_car_park_id`
+		FOREIGN KEY (`parking_area_id`)
+        REFERENCES `Car_park` (`car_park_id`)
+);
+
+-- TABLE For Spot Area Entry Attempt
+CREATE TABLE IF NOT EXISTS `Spot_Area_Entry_Attempt`(
+	`attempt_id` INT UNSIGNED NOT NULL, -- can't contain null values or negative numbers
+    `swipe_card_id` INT UNSIGNED NOT NULL,
+    `parking_area_id` INT UNSIGNED NOT NULL,
+    `date and time of entry` DATETIME NOT NULL,
+    PRIMARY KEY (`attempt_id`),
+    INDEX `fk_spot_area_entry_attempt_swipe_card_idx` (`swipe_card_id` ASC) VISIBLE,
+    INDEX `fk_spot_area_entry_attempt_parking_area_id_idx` (`parking_area_id` ASC) VISIBLE,
+    CONSTRAINT `fk_spot_area_entry_attempt_swipe_card`
+		FOREIGN KEY (`swipe_card_id`)
+        REFERENCES `Swipe_card` (`swipe_card_id`),
+	CONSTRAINT `fk_spot_area_entry_attempt_parking_area_id`
+		FOREIGN KEY (`parking_area_id`)
+        REFERENCES `Spot_reservation_parking_area` (`parking_area_id`)
+);
+
+-- TABLE For Car
+CREATE TABLE IF NOT EXISTS `Car` (
+	`car_number_plate` VARCHAR(10) NOT NULL,
+    `car_brand` VARCHAR(45) NOT NULL,
+    `car_model`	VARCHAR(45) NOT NULL,
+    PRIMARY KEY (`car_number_plate`)
+);
+
+-- TABLE For Spot Reservation
+CREATE TABLE IF NOT EXISTS `Spot_reservation` (
+	`spot_reservation_id` INT UNSIGNED NOT NULL,
+    `swipe_card_id` INT UNSIGNED NOT NULL,
+    `car_number_plate` VARCHAR(10) NOT NULL,
+    `payment_amount` DECIMAL(5,2) NOT NULL,
+    `when_created` DATETIME NOT NULL,
+    PRIMARY KEY (`spot_reservation_id`),
+    INDEX `fk_spot_reservation_swipe_card_id_idx` (`swipe_card_id` ASC) VISIBLE,
+    INDEX `fk_spot_reservation_car_number_plate_idx` (`car_number_plate` ASC) VISIBLE,
+    CONSTRAINT `fk_spot_reservation_swipe_card_id`
+		FOREIGN KEY (`swipe_card_id`)
+        REFERENCES `Swipe_card` (`swipe_card_id`),
+	CONSTRAINT `fk_spot_reservation_car_number_plate`
+		FOREIGN KEY (`car_number_plate`)
+        REFERENCES `Car` (`car_number_plate`)
+);
+
+-- TABLE For Timeslot
+CREATE TABLE IF NOT EXISTS `Timeslot` (
+	`year` YEAR NOT NULL,
+    `semester` CHAR(2) NOT NULL,
+    PRIMARY KEY (`year`, `semester`)
+);
+
+-- TABLE For Numbered parking spot
+CREATE TABLE IF NOT EXISTS `Numbered_parking_spot` (
+	`parking_spot_id` INT UNSIGNED NOT NULL,
+    `parking_area_id` INT UNSIGNED NOT NULL,
+    `location_description` VARCHAR(100) NULL,
+    PRIMARY KEY (`parking_spot_id`),
+    INDEX `fk_numbered_parking_spot_parking_area_id_idx` (`parking_area_id` ASC) VISIBLE,
+    CONSTRAINT `fk_numbered_parking_spot_parking_area_id`
+		FOREIGN KEY (`parking_area_id`)
+        REFERENCES `Spot_reservation_parking_area` (`parking_area_id`)
+);
+
+-- TABLE For Allocation
+CREATE TABLE IF NOT EXISTS `Allocation` (
+	`parking_spot_id` INT UNSIGNED NOT NULL,
+	`year` YEAR NOT NULL,
+    `semester` CHAR(2) NOT NULL,
+    `spot_reservation_id` INT UNSIGNED NOT NULL,
+    PRIMARY KEY (`parking_spot_id`, `year`, `semester`),
+	INDEX `fk_Allocation_Timeslot_idx` (`year` ASC, `semester` ASC) VISIBLE,
+	INDEX `fk_allocation_spot_reservation_id_idx` (`spot_reservation_id` ASC) VISIBLE,
+    CONSTRAINT `fk_allocation_parking_spot_id`
+		FOREIGN KEY (`parking_spot_id`)
+        REFERENCES `Numbered_parking_spot` (`parking_spot_id`),    
+    CONSTRAINT `fk_allocation_year`
+		FOREIGN KEY (`year`)
+        REFERENCES `Timeslot` (`year`) , 
+	CONSTRAINT `fk_Allocation_Timeslot`
+		FOREIGN KEY (`year` , `semester`)
+		REFERENCES `Timeslot` (`year` , `semester`),
+    CONSTRAINT `fk_allocation_reservation_id`
+		FOREIGN KEY (`spot_reservation_id`)
+        REFERENCES `Spot_reservation` (`spot_reservation_id`) 
+);

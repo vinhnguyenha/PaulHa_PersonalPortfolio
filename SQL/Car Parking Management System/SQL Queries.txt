@@ -1,0 +1,103 @@
+-- List each staff number and the number of swipe card records that exist for each staff number. Sort by the largest number of records
+-- first to the smallest number of records being last.
+
+SELECT `staff_number`, COUNT(`swipe_card_id`) AS 'Number of cards'
+FROM `Swipe_card`
+GROUP BY `staff_number`
+ORDER BY COUNT(`swipe_card_id`) DESC;
+
+-- List the distinct staff names and staff numbers (from the staff card) of all staff who have 2 or more spot reservations. Sort by
+-- staff surname in ascending dictionary order.
+
+SELECT `Swipe_card`.`name_on_card`, `Swipe_card`.`staff_number`
+FROM  `Swipe_card` 
+RIGHT JOIN `Spot_reservation` ON `Swipe_card`.`swipe_card_id` = `Spot_reservation`.`swipe_card_id`
+GROUP BY `name_on_card`, `staff_number`
+HAVING COUNT(`spot_reservation_id`) >= 2
+ORDER BY `name_on_card`ASC;
+
+-- no result shown, add more data
+INSERT INTO `Spot_reservation` (`spot_reservation_id`, `swipe_card_id`, `car_number_plate`, `payment_amount`, `when_created`) VALUES
+(21, 1, 'ABC123', 200.00, '2024-06-28 08:00:00'),
+(22, 1, 'DEF456', 210.00, '2024-06-28 08:05:00'),
+(23, 2, 'GHI789', 220.00, '2024-06-28 08:10:00'),
+(24, 2, 'JKL012', 230.00, '2024-06-28 08:15:00'),
+(25, 3, 'MNO345', 240.00, '2024-06-28 08:20:00'),
+(26, 3, 'PQR678', 250.00, '2024-06-28 08:25:00');
+
+-- Show all entry attempts for a chosen swipe card
+-- Chosen swipe card: 1
+SELECT *
+FROM `Spot_area_entry_attempt`
+WHERE `swipe_card_id` = 1;
+
+INSERT INTO `Spot_area_entry_attempt` (`attempt_id`, `swipe_card_id`, `parking_area_id`, `date and time of entry`) VALUES
+(21, 1, 1, '2024-06-28 08:00:00'),
+(22, 1, 2, '2024-06-28 08:10:00'),
+(23, 1, 3, '2024-06-28 08:20:00');
+
+
+-- List the details of each Car Park and the total number of numbered parking spots in each car park.
+
+SELECT `Car_park`.`car_park_id`, `Car_park`.`map_reference`, `Car_park`.`car_park_description`, COUNT(`Numbered_parking_spot`.`parking_spot_id`) AS `No of Spots in each Car Park`
+FROM `Car_park`
+LEFT JOIN `Spot_reservation_parking_area` ON `Car_park`.`car_park_id`= `Spot_reservation_parking_area`.`car_park_id`
+LEFT JOIN `Numbered_parking_spot` ON `Numbered_parking_spot`.`parking_area_id` = `Spot_reservation_parking_area`.`parking_area_id`
+GROUP BY `Car_park`.`car_park_id`;
+
+-- How many cars has each swipe card ever been associated with? List each swipe card id and count of different number plates.
+
+SELECT `Swipe_card`.`swipe_card_id`, COUNT(Distinct `Spot_reservation`.`car_number_plate`) AS `No of cars associated with this card_id`
+FROM `Swipe_card` 
+LEFT JOIN `Spot_reservation` ON `Swipe_card`.`swipe_card_id` = `Spot_reservation`.`swipe_card_id` 
+-- LEFT JOIN INSTEAD OF INNER JOIN because I want to show all swipe cards, including those without any cars associated with them.
+GROUP BY `Swipe_card`.`swipe_card_id`;
+
+-- For a given timeslot (any year and semester), how many parking spots are not allocated in each car park?
+-- Chosen year and semester: Year 2023, Semester 1
+
+SELECT `Car_park`.`car_park_id`, COUNT(`Numbered_parking_spot`.`parking_spot_id`) AS `Count of Unallocated Spots`
+FROM `Car_park`
+LEFT JOIN `Spot_reservation_parking_area` ON `Car_park`.`car_park_id`= `Spot_reservation_parking_area`.`car_park_id`
+LEFT JOIN `Numbered_parking_spot` ON `Numbered_parking_spot`.`parking_area_id` = `Spot_reservation_parking_area`.`parking_area_id`
+LEFT JOIN `Allocation` ON `Numbered_parking_spot`.`parking_spot_id` = `Allocation`.`parking_spot_id`
+AND `Allocation`.`semester` = 1 AND `Allocation`.`year` = 2023
+WHERE `Allocation`.`parking_spot_id` IS NULL 
+GROUP BY `Car_park`.`car_park_id`
+HAVING COUNT(`Numbered_parking_spot`.`parking_spot_id`) > 0; -- 0 means car parks are fully allocated
+
+-- What is the total $ amount that each staff member has paid for parking during the lifetime of this system? In the query, list
+-- the staff number and the total $ amount for that staff member.
+
+SELECT `Swipe_card`.`staff_number`, CONCAT(SUM(`Spot_reservation`.`payment_amount`), " $") as "Payment_Amount"
+FROM `Swipe_card`
+LEFT JOIN `Spot_reservation` ON `Swipe_card`.`swipe_card_id` = `Spot_reservation`.`swipe_card_id`
+GROUP BY `Swipe_card`.`staff_number`;
+
+-- How much revenue (payments total) has each car park brought in each year? List the car park id, year, and total $ amount
+-- for that car park for that year.
+SELECT `Car_park`.`car_park_id`, `Allocation`.`year`, SUM(`payment_amount`) as "Annual Revenue"
+FROM `Car_park`
+LEFT JOIN `Spot_reservation_parking_area` ON `Car_park`.`car_park_id`= `Spot_reservation_parking_area`.`car_park_id`
+LEFT JOIN `Numbered_parking_spot` ON `Numbered_parking_spot`.`parking_area_id` = `Spot_reservation_parking_area`.`parking_area_id`
+LEFT JOIN `Allocation` ON `Numbered_parking_spot`.`parking_spot_id` = `Allocation`.`parking_spot_id`
+LEFT JOIN `Spot_reservation` ON `Spot_reservation`.`spot_reservation_id` = `Allocation`.`spot_reservation_id`
+GROUP BY `Car_park`.`car_park_id`, `Allocation`.`year`;
+
+-- Insert additional data into Spot_reservation table
+INSERT INTO `Spot_reservation` (`spot_reservation_id`, `swipe_card_id`, `car_number_plate`, `payment_amount`, `when_created`) VALUES
+(27, 4, 'JKL012', 180.00, '2023-06-27 09:00:00'),
+(28, 5, 'MNO345', 190.00, '2023-06-27 09:10:00'),
+(29, 6, 'PQR678', 210.00, '2022-06-27 09:20:00'),
+(30, 7, 'STU901', 220.00, '2022-06-27 09:30:00'),
+(31, 8, 'VWX234', 230.00, '2021-06-27 09:40:00'),
+(32, 9, 'YZA567', 240.00, '2021-06-27 09:50:00');
+
+-- Insert additional data into Allocation table
+INSERT INTO `Allocation` (`parking_spot_id`, `year`, `semester`, `spot_reservation_id`) VALUES
+(1, 2023, 'S1', 27),
+(2, 2023, 'S2', 28),
+(3, 2022, 'S1', 29),
+(4, 2022, 'S2', 30),
+(5, 2021, 'S1', 31),
+(6, 2021, 'S2', 32);
