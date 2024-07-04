@@ -1,3 +1,7 @@
+A detailed project explanation would be discussed in the video below.
+
+[Click Here for Google Drive Link to Project Explanation](https://drive.google.com/file/d/1sWZq4zgPz8RfJ5k4a2Df8ibA1cgnalou/view?usp=drive_link)
+
 This project is about used car sales prediction. The primary objective of this project is to implement regression (a type of machine learning algorithm) in order to investigate a model that could provide 
 accurate results.
 
@@ -29,10 +33,6 @@ shrinkage applied to coefficients, impacting both the model's accuracy and its a
   + *Enhances Training Efficiency:* Proper hyperparameter values can make the training process more efficient, leading to faster convergence and better use of computational resources.
 
 After completing the above stages, I trained several regression models and compared them to understand which model provides the best prediction result.
-
-A detailed explanation would be discussed in the video below.
-
-[Click Here for Google Drive Link to Project Explanation](https://drive.google.com/file/d/1sWZq4zgPz8RfJ5k4a2Df8ibA1cgnalou/view?usp=drive_link)
 
 For any enquiries, please email to havinhnguyen24@gmail.com.
 
